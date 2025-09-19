@@ -94,6 +94,20 @@ int processConnection(int sockFd) {
   // - If the header was valid and the method was HEAD, call a function to send back the header.
   // - If the header was valid and the method was POST, call a function to save the file to dis.
 
+  #define BUFFER_SIZE 1024
+  int bytesread;
+
+  char buffer[BUFFER_SIZE];
+  bzero(buffer, BUFFER_SIZE);
+
+  bytesread = read(sockFd, buffer, BUFFER_SIZE);
+
+  if (bytesread < 1) {
+    std::cout << "Read Failed for sockFd in processConnection()" << strerror(errno) << std::endl;
+  }
+
+
+
   return 0;
 }
     
@@ -104,10 +118,11 @@ int main (int argc, char *argv[]) {
   // ********************************************************************
   // * Process the command line arguments
   // ********************************************************************
+ 
   int opt = 0;
   while ((opt = getopt(argc,argv,"d:")) != -1) {
     
-    switch (opt) {
+    switch (opt) {  
     case 'd':
       LOG_LEVEL = std::stoi(optarg);
       break;
@@ -130,8 +145,27 @@ int main (int argc, char *argv[]) {
   // *******************************************************************
   // * Creating the inital socket using the socket() call.
   // ********************************************************************
+
   int listenFd;
+  listenFd = socket(AF_INET, SOCK_STREAM, 0);
   DEBUG << "Calling Socket() assigned file descriptor " << listenFd << ENDL;
+
+  
+
+
+  if ((listenFd < 0)){
+    std::cout<<"Error creating socket" << strerror(errno) << std::endl;
+    exit(-1);
+  }
+
+    
+    uint16_t port = 1701;
+    struct sockaddr_in servaddr;
+
+    bzero(&servaddr, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    servaddr.sin_port = htons(port);
 
   
   // ********************************************************************
@@ -145,6 +179,10 @@ int main (int argc, char *argv[]) {
   // address INADDR_ANY
   // ********************************************************************
 
+  if (bind(listenFd, (sockaddr*) &servaddr, sizeof(servaddr)) < 0){
+    std::cout << "bind() failed " << strerror(errno) << std::endl;
+    exit(-1);
+  }
 
 
   // ********************************************************************
@@ -155,7 +193,7 @@ int main (int argc, char *argv[]) {
   // * Don't forget to check to see if bind() fails because the port
   // * you picked is in use, and if the port is in use, pick a different one.
   // ********************************************************************
-  uint16_t port;
+  
   DEBUG << "Calling bind()" << ENDL;
   
   std::cout << "Using port: " << port << std::endl;
@@ -167,6 +205,11 @@ int main (int argc, char *argv[]) {
   // * connections and starts the kernel listening for connections.
   // ********************************************************************
   DEBUG << "Calling listen()" << ENDL;
+  int listeng = 1;
+  if (listen(listenFd, listeng) < 0){
+    std::cout << "Listen() failed" << strerror(errno) << std::endl;
+    exit(-1);
+  }
 
 
   // ********************************************************************
@@ -178,7 +221,10 @@ int main (int argc, char *argv[]) {
   while (!quitProgram) {
     int connFd = 0;
     DEBUG << "Calling connFd = accept(fd,NULL,NULL)." << ENDL;
-
+    if ((connFd = accept(listenFd, (sockaddr *) NULL, NULL)) < 0){
+        std::cout << "accept() failed" << strerror(errno) << std::endl;
+        exit(-1);
+    }
     
 
     DEBUG << "We have recieved a connection on " << connFd << ". Calling processConnection(" << connFd << ")" << ENDL;

@@ -15,6 +15,7 @@
 #include <arpa/inet.h>
 
 #include "logging.h"
+#include <sys/socket.h>
 
 #define GET 1
 #define HEAD 2
