@@ -30,7 +30,12 @@
 // * - Display the signal and exit (returning 0 to OS indicating normal shutdown)
 // * - Optional for 471, required for 598
 // **************************************************************************************
-// void sig_handler(int signo) {}
+void sig_handler(int signo) {
+  DEBUG << "Caught signal #" << signo << ENDL;
+  DEBUG << "Closing file descriptors 3-31." << ENDL;
+  closefrom(3);
+  exit(1);
+}
 
 
 // **************************************************************************************
@@ -142,10 +147,10 @@ void send404(int sockFd) {
 
   
   sendLine(sockFd, "404 Not Found");
-  sendLine(sockFd, "Content-Type: ");
+  sendLine(sockFd, "Content-Type: text/html");
   sendLine(sockFd, "");
-  sendLine(sockFd, "<h1>404 Not Found</h1>");
-  sendLine(sockFd, "<p>The requested file could not be found or is not permitted");
+  sendLine(sockFd, "404 Not Found");
+  sendLine(sockFd, "The requested file could not be found or is not permitted");
 
   
 }
@@ -158,8 +163,8 @@ void send400(int sockFd) {
   sendLine(sockFd, "400 Bad Request");
   sendLine(sockFd, "Content-type: text/html");
   sendLine(sockFd, "");
-  sendLine(sockFd, "<h1>Bad Request</h1>");
-  sendLine(sockFd, "<p>The server could not understand the request");
+  sendLine(sockFd, "Bad Request");
+  sendLine(sockFd, "The server could not understand the request");
   
 }
 
@@ -202,7 +207,7 @@ void sendFile(int sockFd,std::string filename) {
   }
 
   //Create Buffer to send back;
-  char buffer[4096];
+  char buffer[10];
   ssize_t bytesRead;
 
   while ((bytesRead = read(fileFd, buffer, sizeof(buffer))) > 0){
@@ -283,6 +288,7 @@ int main (int argc, char *argv[]) {
   // ********************************************************************
   DEBUG << "Setting up signal handlers" << ENDL;
   
+  signal(SIGINT,sig_handler);
 
   
   // *******************************************************************
