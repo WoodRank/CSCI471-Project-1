@@ -39,7 +39,78 @@
 //   - Set filename if appropriate. Filename syntax is valided but existance is not verified.
 // **************************************************************************************
 int readHeader(int sockFd,std::string &filename) {
-  return 0;
+
+  //default return code
+  
+
+  
+  int bytesread;
+  std::string container; //Container for the buffer
+
+  char buffer[BUFFER_SIZE];
+  bzero(buffer, BUFFER_SIZE);
+
+  DEBUG << "ProcessConnection bytes being read" << ENDL;
+
+  while ((bytesread = read(sockFd, buffer, BUFFER_SIZE)) > 0){
+    DEBUG << "This is container: " << container << ENDL;
+    container.append(buffer, bytesread);
+    if (container.find("\r\n\r\n") != std::string::npos){
+      break;
+    }
+  }
+
+  
+  if (bytesread < 0) {
+    std::cout << "Read Failed for sockFd in processConnection()" << strerror(errno) << std::endl;
+  }
+
+  //Getting First Line to parse the Get Request using Regex
+  size_t pos = container.find("\r\n");
+  std::string firstLine = container.substr(0, pos);
+
+
+
+  std::smatch match; // smatch is from regex library to store regex_match results
+  std::regex getLine("^GET\\s+/(file[0-9]\\.html|image[0-9]\\.jpg)\\s+HTTP/1\\.[01]$");
+  
+  if (std::regex_match(firstLine, match, getLine)){ //That means that there the request has valid request
+    std::istringstream iss(firstLine);
+    std::string requestMethod, fileName, httpVersion;
+    iss >> requestMethod >> fileName >> httpVersion;
+  
+    DEBUG << "Testing Regex" << ENDL;
+    DEBUG << "Method: " << requestMethod << "| File Name: " << fileName << "| HTTP Version: " << httpVersion << ENDL;
+
+    
+    
+    //Request is Valid but file might now exist so check file in directory
+    if(std::filesystem::exists("data"+fileName)){
+      //Set the Filename to the filename from the requestheader
+      DEBUG << "File Found in directory" << ENDL;
+      filename = "data" + fileName;
+      return 200;
+    }
+    
+    
+    DEBUG << "File not found in directory" << ENDL;
+    return 404;
+  }
+  //Non valid files
+  if (firstLine.rfind("GET", 0) == 0){
+    WARNING << "GET request for non valid files" << ENDL;
+    return 404;
+  }
+
+  //Other unspported methods 
+  WARNING << "Invalid or unsupported request method" << ENDL;
+
+
+  
+
+  
+  
+  return 400; //Bad Request
 }
 
 
@@ -47,22 +118,49 @@ int readHeader(int sockFd,std::string &filename) {
 // * Send one line (including the line terminator <LF><CR>)
 // * - Assumes the terminator is not included, so it is appended.
 // **************************************************************************
-void sendLine(int socketFd, std::string &stringToSend) {
-  return;
+void sendLine(int socketFd, const std::string &stringToSend) {
+
+  size_t length = stringToSend.size();
+  char buffer[length + 2];
+  memcpy(buffer, stringToSend.c_str(), length); //Exactly copy "length" bytes to buffer
+  buffer[length] = '\r';
+  buffer[length + 1] = '\n';
+
+
+  DEBUG << "Writing to Scoket" << ENDL;
+  if (write(socketFd, buffer, length+2) == -1){
+    ERROR << "Failed to write to socket" << ENDL;
+  }
 }
 
 // **************************************************************************
 // * Send the entire 404 response, header and body.
 // **************************************************************************
 void send404(int sockFd) {
-  return;
+  DEBUG << "Running send404" << ENDL;
+  INFO << "Sending 404 Not Found" <<ENDL;
+
+  
+  sendLine(sockFd, "404 Not Found");
+  sendLine(sockFd, "Content-Type: ");
+  sendLine(sockFd, "");
+  sendLine(sockFd, "<h1>404 Not Found</h1>");
+  sendLine(sockFd, "<p>The requested file could not be found or is not permitted");
+
+  
 }
 
 // **************************************************************************
 // * Send the entire 400 response, header and body.
 // **************************************************************************
 void send400(int sockFd) {
-  return;
+  INFO << "Sending 400 Bad Request" << ENDL;
+  sendLine(sockFd, "400 Bad Request");
+  sendLine(sockFd, "Content-type: text/html");
+  sendLine(sockFd, "");
+  sendLine(sockFd, "<h1>Bad Request</h1>");
+  sendLine(sockFd, "<p>The server could not understand the request");
+  
 }
 
 
@@ -70,7 +168,34 @@ void send400(int sockFd) {
 // * sendFile
 // * -- Send a file back to the browser.
 // **************************************************************************************
-void sesendFile(int sockFd,std::string filename) {
+void sendFile(int sockFd,std::string filename) {
+  struct stat fileStat;
+
+  if (stat(filename.c_str(), &fileStat) == -1){
+    WARNING << "File not found or no read permission: " << filename << ENDL;
+    send404(sockFd);
+  }
+
+  size_t fileSize = fileStat.st_size;
+
+  //Find the content-type
+  std::string contentType;
+  if (filename.find("html") != std::string::npos){
+    contentType = "Content-Type: text/html";
+  }
+  else if (filename.find("jpg") != std::string::npos){
+    contentType = "Content-Type: image/jpg";
+  }
+
+  INFO << "Sending 200 OK for " << filename << " | file size: " << fileSize << " bytes" << ENDL;
+
+  sendLine(sockFd, "HTTP/1.0 200 OK");
+  sendLine(sockFd, "Content-Length: " + std::to_string(fileSize));
+  sendLine(sockFd, contentType);
+  sendLine(sockFd, ""); //End header
+  
+
+
   return;
 }
 
@@ -82,6 +207,8 @@ void sesendFile(int sockFd,std::string filename) {
 int processConnection(int sockFd) {
  
   // Call readHeader()
+  std::string filename;
+  int responseCode = readHeader(sockFd, filename);
 
   // If read header returned 400, send 400
 
@@ -94,16 +221,15 @@ int processConnection(int sockFd) {
   // - If the header was valid and the method was HEAD, call a function to send back the header.
   // - If the header was valid and the method was POST, call a function to save the file to dis.
 
-  #define BUFFER_SIZE 1024
-  int bytesread;
-
-  char buffer[BUFFER_SIZE];
-  bzero(buffer, BUFFER_SIZE);
-
-  bytesread = read(sockFd, buffer, BUFFER_SIZE);
-
-  if (bytesread < 1) {
-    std::cout << "Read Failed for sockFd in processConnection()" << strerror(errno) << std::endl;
+  if (responseCode == 400){
+    send400(sockFd);
+  }
+  else if (responseCode == 404){
+    send404(sockFd);
+  }
+  else if (responseCode == 200){
+    DEBUG << "Sending File: " << filename << "| Reponse Code: 200" << ENDL;
+    sendFile(sockFd, filename);
   }
 
 
@@ -179,10 +305,12 @@ int main (int argc, char *argv[]) {
   // address INADDR_ANY
   // ********************************************************************
 
+  
   if (bind(listenFd, (sockaddr*) &servaddr, sizeof(servaddr)) < 0){
     std::cout << "bind() failed " << strerror(errno) << std::endl;
     exit(-1);
   }
+  
 
 
   // ********************************************************************

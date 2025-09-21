@@ -5,6 +5,8 @@
 #include <fstream>
 #include <regex>
 #include <string>
+#include <sstream>
+#include <filesystem>
 
 #include <string.h>
 #include <unistd.h>
