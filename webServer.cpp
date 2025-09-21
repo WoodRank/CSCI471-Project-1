@@ -193,10 +193,27 @@ void sendFile(int sockFd,std::string filename) {
   sendLine(sockFd, "Content-Length: " + std::to_string(fileSize));
   sendLine(sockFd, contentType);
   sendLine(sockFd, ""); //End header
+
+
+  int fileFd = open(filename.c_str(), O_RDONLY);
+  if (fileFd == -1){
+    ERROR << "Failed to open file " << filename << ENDL;
+    return;
+  }
+
+  //Create Buffer to send back;
+  char buffer[4096];
+  ssize_t bytesRead;
+
+  while ((bytesRead = read(fileFd, buffer, sizeof(buffer))) > 0){
+    if (write(sockFd, buffer, sizeof(buffer)) < 0){
+      ERROR << "Failed to write to socket" << ENDL;
+      break;
+    }
+  }
+
+  close(fileFd);
   
-
-
-  return;
 }
 
 
@@ -305,11 +322,22 @@ int main (int argc, char *argv[]) {
   // address INADDR_ANY
   // ********************************************************************
 
-  
-  if (bind(listenFd, (sockaddr*) &servaddr, sizeof(servaddr)) < 0){
-    std::cout << "bind() failed " << strerror(errno) << std::endl;
-    exit(-1);
+  while(1){
+    servaddr.sin_port = htons(port);
+
+    DEBUG << "Calling Bind on port: " << port << ENDL;
+    if (bind(listenFd, (sockaddr*) &servaddr, sizeof(servaddr)) < 0){
+      std::cout << "bind() failed " << strerror(errno) << std::endl;
+      if (errno == EADDRINUSE){
+        port++;
+      }else{
+        exit(-1);
+      }
+    }else{
+      break;
+    }
   }
+  
   
 
 
@@ -322,9 +350,7 @@ int main (int argc, char *argv[]) {
   // * you picked is in use, and if the port is in use, pick a different one.
   // ********************************************************************
   
-  DEBUG << "Calling bind()" << ENDL;
-  
-  std::cout << "Using port: " << port << std::endl;
+ 
 
 
   // ********************************************************************
