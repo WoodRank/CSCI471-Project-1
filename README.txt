@@ -1,7 +1,4 @@
-#
-# This file should include your name, which course you are registered for (471 or 598-J)
-# and any special instructions or notes requried for building and running your webServer
-#
-
 Zaudan Wawhkyung
 CSCI 471
+
+This is a simple assignment where it mimics what a web server would do. Only the GET requests are implemented and other requests are ignored.
